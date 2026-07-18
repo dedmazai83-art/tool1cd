@@ -57,7 +57,8 @@ jobs:
           }
           $help = & $exe -h 2>&1 | Out-String
           $help | Set-Content -Path "build\ctool1cd-help.txt" -Encoding UTF8
-          if ($help -notmatch "DeleteRecord" -and $help -notmatch "deleterecord") {
+          $binaryText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($exe))
+          if ($binaryText -notmatch "deleterecord") {
             throw "The built executable does not contain the DeleteRecord command"
           }
 
