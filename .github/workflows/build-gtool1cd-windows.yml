@@ -63,16 +63,51 @@ jobs:
             throw "gtool1cd.exe was not produced"
           }
 
-      - name: Deploy Qt runtime
+      - name: Deploy runtime files
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "dist" | Out-Null
           Copy-Item "build\bin\Release\gtool1cd.exe" "dist\gtool1cd.exe"
+
           & "$env:QT_ROOT_DIR\bin\windeployqt.exe" `
             --release `
             --no-translations `
-            --compiler-runtime `
             "dist\gtool1cd.exe"
+
+          $roots = @(
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Enterprise\VC\Redist\MSVC",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Professional\VC\Redist\MSVC",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\Community\VC\Redist\MSVC",
+            "${env:ProgramFiles(x86)}\Microsoft Visual Studio\2022\BuildTools\VC\Redist\MSVC"
+          )
+
+          $crtDir = $null
+          foreach ($root in $roots) {
+            if (-not (Test-Path $root)) {
+              continue
+            }
+            $versionDir = Get-ChildItem $root -Directory | Sort-Object Name -Descending | Select-Object -First 1
+            if ($null -eq $versionDir) {
+              continue
+            }
+            $candidate = Join-Path $versionDir.FullName "x64\Microsoft.VC143.CRT"
+            if (Test-Path $candidate) {
+              $crtDir = $candidate
+              break
+            }
+          }
+
+          if ($null -eq $crtDir) {
+            throw "Visual C++ x64 runtime directory was not found"
+          }
+
+          Copy-Item "$crtDir\*.dll" "dist"
+
+          foreach ($required in @("Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll", "platforms\qwindows.dll", "MSVCP140.dll", "VCRUNTIME140.dll", "VCRUNTIME140_1.dll")) {
+            if (-not (Test-Path (Join-Path "dist" $required))) {
+              throw "Required runtime file is missing: $required"
+            }
+          }
 
       - name: Create archive
         shell: pwsh
