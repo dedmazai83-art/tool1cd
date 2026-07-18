@@ -1,3 +1,4 @@
 Build the Windows x64 console executable with the DeleteRecord command.
 Retry with uploaded diagnostics.
 Retry with Boost.Algorithm installed.
+Retry with binary command verification.
