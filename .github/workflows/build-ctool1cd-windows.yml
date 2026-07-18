@@ -40,10 +40,15 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build
+        id: build
+        continue-on-error: true
         shell: pwsh
-        run: cmake --build build --config Release --target ctool1cd --parallel
+        run: |
+          cmake --build build --config Release --target ctool1cd --parallel 2>&1 | Tee-Object -FilePath "build\build-output.txt"
+          exit $LASTEXITCODE
 
       - name: Verify DeleteRecord command
+        if: steps.build.outcome == 'success'
         shell: pwsh
         run: |
           $exe = "build\bin\Release\ctool1cd.exe"
@@ -56,12 +61,19 @@ jobs:
             throw "The built executable does not contain the DeleteRecord command"
           }
 
-      - name: Upload executable
+      - name: Upload build output
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ctool1cd-windows-x64
           path: |
             build/bin/Release/ctool1cd.exe
             build/ctool1cd-help.txt
-          if-no-files-found: error
+            build/build-output.txt
+          if-no-files-found: warn
           retention-days: 30
+
+      - name: Fail when compilation failed
+        if: steps.build.outcome == 'failure'
+        shell: pwsh
+        run: throw "ctool1cd compilation failed; see build-output.txt in the artifact"
