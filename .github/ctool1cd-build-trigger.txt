@@ -1,1 +1,2 @@
 Build the Windows x64 console executable with the DeleteRecord command.
+Retry with uploaded diagnostics.
