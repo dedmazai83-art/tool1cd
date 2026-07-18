@@ -26,7 +26,7 @@ jobs:
         shell: pwsh
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
-            boost-filesystem boost-system boost-regex boost-random boost-uuid boost-crc zlib `
+            boost-algorithm boost-filesystem boost-system boost-regex boost-random boost-uuid boost-crc zlib `
             --triplet x64-windows-static
 
       - name: Configure
