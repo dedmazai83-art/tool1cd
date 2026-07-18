@@ -1,0 +1,101 @@
+name: Build gtool1cd for Windows
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: 'qt5compat'
+          cache: true
+
+      - name: Install Boost and zlib
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+            boost-algorithm boost-filesystem boost-system boost-regex boost-random boost-uuid boost-crc zlib `
+            --triplet x64-windows-static-md
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DNOGUI=OFF `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --target gtool1cd --parallel
+
+      - name: Verify delete-record implementation
+        shell: pwsh
+        run: |
+          $source = Get-Content "src\gtool1cd\table_data_window.cpp" -Raw
+          if ($source -notmatch "mark_record_removed") {
+            throw "Delete-record implementation is missing"
+          }
+          if ($source -notmatch "Удалить запись") {
+            throw "Delete-record context menu text is missing"
+          }
+          if (-not (Test-Path "build\bin\Release\gtool1cd.exe")) {
+            throw "gtool1cd.exe was not produced"
+          }
+
+      - name: Deploy Qt runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          Copy-Item "build\bin\Release\gtool1cd.exe" "dist\gtool1cd.exe"
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" `
+            --release `
+            --no-translations `
+            --compiler-runtime `
+            "dist\gtool1cd.exe"
+
+      - name: Create archive
+        shell: pwsh
+        run: |
+          @"
+          Fresh Windows x64 GUI build of Tool1CD.
+
+          Safety:
+          - Work only on a separate copy of 1Cv8.1CD.
+          - Close all 1C processes before opening the copy.
+          - In CONFIG, right-click the row with FILENAME=commit and choose "Удалить запись".
+          - Do not clear the entire CONFIG table.
+
+          Requires Windows 10/11 or Windows Server 2016 and newer.
+          "@ | Set-Content -Path "dist\README.txt" -Encoding UTF8
+          Compress-Archive -Path "dist\*" -DestinationPath "gtool1cd-windows-x64.zip" -Force
+
+      - name: Upload GUI package
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtool1cd-windows-x64
+          path: |
+            gtool1cd-windows-x64.zip
+            dist/**
+          if-no-files-found: error
+          retention-days: 30
