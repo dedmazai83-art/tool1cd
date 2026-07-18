@@ -1,0 +1,64 @@
+name: Build ctool1cd for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - ".github/workflows/build-ctool1cd-windows.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install `
+            boost-filesystem boost-system boost-regex boost-random boost-uuid boost-crc zlib `
+            --triplet x64-windows-static
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -S . -B build `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DNOGUI=ON `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --config Release --target ctool1cd --parallel
+
+      - name: Verify DeleteRecord command
+        shell: pwsh
+        run: |
+          $exe = "build\bin\Release\ctool1cd.exe"
+          if (-not (Test-Path $exe)) {
+            throw "ctool1cd.exe was not produced"
+          }
+          $help = & $exe -h 2>&1 | Out-String
+          $help | Set-Content -Path "build\ctool1cd-help.txt" -Encoding UTF8
+          if ($help -notmatch "DeleteRecord" -and $help -notmatch "deleterecord") {
+            throw "The built executable does not contain the DeleteRecord command"
+          }
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctool1cd-windows-x64
+          path: |
+            build/bin/Release/ctool1cd.exe
+            build/ctool1cd-help.txt
+          if-no-files-found: error
+          retention-days: 30
